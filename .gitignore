@@ -1,0 +1,15 @@
+# Runtime artefacts (positions, reserve, audit, delivery DBs, Excel reports)
+runtime/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

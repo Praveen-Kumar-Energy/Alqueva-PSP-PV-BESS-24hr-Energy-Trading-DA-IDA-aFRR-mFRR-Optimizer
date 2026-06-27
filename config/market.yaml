@@ -1,0 +1,142 @@
+# =============================================================================
+# MIBEL Market Configuration — Portugal (OMIE energy, REN balancing)
+# =============================================================================
+# All gate times are CET (Europe/Madrid). Portugal local (Lisbon) is CET-1 in
+# winter, CET in summer — conversions handled in timezone_utils, never implicit.
+# =============================================================================
+
+market:
+  zone: "PT"
+  energy_operator: "OMIE"
+  balancing_operator: "REN"
+  currency: "EUR"
+
+# -----------------------------------------------------------------------------
+# Energy market gates.
+# Trigger = when our pipeline runs (before close, leaves time for approval).
+# Close   = hard market deadline (CET).
+# -----------------------------------------------------------------------------
+gates:
+  DA:
+    description: "Day-Ahead auction (OMIE)"
+    pipeline_trigger: "D-1 11:00"
+    gate_close: "D-1 12:00"
+    delivery_hours: [1, 24]
+    resolution_h: 1
+  IDA1:
+    description: "Intraday Auction 1 (SIDC, 3-session regime)"
+    pipeline_trigger: "D-1 14:10"
+    gate_close: "D-1 15:00"
+    delivery_hours: [1, 24]
+    resolution_h: 1
+  IDA2:
+    description: "Intraday Auction 2 — covers delivery hours H3-H24 (H1-H2 frozen after IDA1)"
+    pipeline_trigger: "D-1 21:10"
+    gate_close: "D-1 22:00"
+    delivery_hours: [3, 24]          # H1-H2 frozen after IDA1; spec INV-11
+    resolution_h: 1
+  IDA3:
+    description: "Intraday Auction 3 — covers delivery hours 12-24 ONLY"
+    pipeline_trigger: "D 09:10"
+    gate_close: "D 10:00"
+    delivery_hours: [12, 24]        # CONFIRMED: hours 1-11 are NOT in the IDA3 product
+    resolution_h: 1
+  XBID:
+    description: "Continuous intraday (SIDC/XBID). Closes 1h before each delivery period."
+    type: "continuous"
+    gate_closure_hours_before_delivery: 1
+    check_window_1_trigger: "D-1 18:30"
+    check_window_2_trigger: "D 09:30"
+    delivery_hours: [1, 24]
+
+# -----------------------------------------------------------------------------
+# SIDC reform: 6-session intraday ended 12 Jun 2024; 3-session (IDA1/2/3) from
+# 13 Jun 2024. Loaders detect the era per delivery date.
+# https://www.omie.es (SIDC intraday auctions go-live)
+# -----------------------------------------------------------------------------
+ida_regime:
+  sessions_3_from_date: "2024-06-13"
+
+# -----------------------------------------------------------------------------
+# Balancing / ISP.
+# CONFIRMED: Portugal ISP -> 15 min from 19 Mar 2025 (96 ISPs/day).
+# -----------------------------------------------------------------------------
+balancing:
+  isp_per_hour: 4
+  isp_duration_min: 15
+  portugal_isp_transition_date: "2025-03-19"
+  afrr_fat_min: 5.0                 # CONFIRMED PICASSO (harmonised 4 Dec 2024, was 7.5)
+  mfrr_fat_min: 12.5                # CONFIRMED MARI standard
+
+# -----------------------------------------------------------------------------
+# Frequency bands (Continental Europe synchronous area).
+# Nominal 50.000 Hz. Source: ENTSO-E SO GL / Synchronous Area Framework Agreement.
+# These bands define WHICH reserve answers WHICH deviation — used by reserve sizing
+# and printed in the demo so the operator sees the product boundaries.
+# -----------------------------------------------------------------------------
+frequency:
+  nominal_hz: 50.000
+  fcr:                              # mandatory, non-remunerated in PT/ES
+    deadband_mhz: 10                # +/- 10 mHz no-response deadband
+    full_activation_hz: 0.200       # full FCR at +/- 200 mHz (49.800 / 50.200)
+    full_activation_time_s: 30      # 100% within 30 s
+  afrr:
+    typical_band_hz: 0.200          # restores frequency within the 49.800-50.200 band
+    full_activation_time_min: 5.0
+  mfrr:
+    typical_band_hz: 0.200          # supports / replaces aFRR; manual TSO call
+    full_activation_time_min: 12.5
+
+# -----------------------------------------------------------------------------
+# Bid limits (physical envelope; price bounds are OMIE technical limits).
+# -----------------------------------------------------------------------------
+bid_limits:
+  price_min_eur_mwh: -500.0         # OMIE technical floor (harmonised SDAC)
+  price_max_eur_mwh: 4000.0         # OMIE technical cap (harmonised SDAC)
+  max_generation_mw: 524.4          # 4x129.6 turbine + 5 PV + 1 BESS discharge (matches PlantConfig.p_max_generation_mw)
+  max_pump_mw: 447.4                # 4x111.6 pump + 1 BESS charge (matches PlantConfig.p_max_pump_mw) — pump ESTIMATED
+
+# -----------------------------------------------------------------------------
+# aFRR — Portugal national platform; PICASSO accession expected ~Q3 2026.
+# https://www.entsoe.eu/network_codes/eb/picasso/
+# -----------------------------------------------------------------------------
+afrr:
+  platform: "NATIONAL"              # "NATIONAL" or "PICASSO" — update on REN accession
+  ren_picasso_accession_estimate: "2026-Q3"
+  gate_close: "D-1 08:00"           # ESTIMATE — verify with REN market rules
+  max_offer_up_mw: 100.0
+  max_offer_dn_mw: 100.0
+  cap_price_max_eur_mw: 250.0       # CONFIRMED REN mercado portal cap
+
+# -----------------------------------------------------------------------------
+# mFRR — CONFIRMED: REN joined MARI 27 Nov 2024.
+# https://www.entsoe.eu/network_codes/eb/mari/
+# -----------------------------------------------------------------------------
+mfrr:
+  mari_live_date: "2024-11-27"
+  gate_close: "D-1 08:00"           # ESTIMATE — verify with REN market rules
+  max_offer_fraction: 0.20          # cap offer at 20% of available headroom
+  price_fraction_of_afrr: 0.40      # synthetic price fallback only
+
+# -----------------------------------------------------------------------------
+# Imbalance settlement (REN dual pricing). Actual REN ISP price preferred;
+# fallbacks used only when DataHub price unavailable.
+# -----------------------------------------------------------------------------
+imbalance:
+  pricing_type: "dual"
+  source: "REN"
+  resolution: "ISP"
+  fallback_short_factor: 1.20       # short imbalance priced DA x 1.20
+  fallback_long_factor: 0.85        # long  imbalance priced DA x 0.85
+
+# -----------------------------------------------------------------------------
+# Economic thresholds — stop churn (no re-bid below a real improvement).
+# -----------------------------------------------------------------------------
+trading_thresholds:
+  ida_min_delta_mwh: 0.5            # per-hour volume noise filter: ignore |delta| below this
+  ida_min_spread_eur_mwh: 5.0       # per-hour price-move materiality (and XBID spread)
+  ida_min_rebid_eur_floor: 30.0     # absolute floor — never re-bid for less than this EUR gain
+  ida_min_rebid_pct: 0.15           # dynamic threshold: 0.15% of DA position value in tradable hours
+  xbid_min_spread_eur_mwh: 5.0
+  xbid_max_slippage_eur: 2.0
+  xbid_max_volume_per_order_mw: 10.0

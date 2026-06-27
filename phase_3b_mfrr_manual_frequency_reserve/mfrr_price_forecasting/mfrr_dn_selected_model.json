@@ -1,0 +1,10 @@
+{
+  "selected": "LightGBM",
+  "cv_mae": {
+    "Naive": 2.3909,
+    "Ridge": 2.4876,
+    "LightGBM": 1.9339
+  },
+  "data_end_date": "2025-12-31",
+  "updated_on": "2026-06-27"
+}

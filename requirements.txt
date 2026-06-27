@@ -1,0 +1,16 @@
+# Alqueva 24h Energy Trading Optimizer — Python dependencies
+# Solver is auto-selected, CPLEX-first (see config/solver.yaml fallback_order):
+#   1. CPLEX (preferred) — install IBM CPLEX separately and license it; it is
+#            called as an executable via Pyomo, so no Python binding is needed.
+#   2. HiGHS (free)      — provided by `highspy` below; used automatically when
+#            CPLEX is absent, so the pipeline runs on any machine out of the box.
+
+pyomo>=6.7            # optimisation modelling layer (solver-agnostic)
+highspy>=1.7          # free HiGHS MILP solver: automatic fallback when CPLEX is absent
+numpy>=1.26           # numerics
+pandas>=2.2           # data handling (live loaders)
+PyYAML>=6.0           # config files
+openpyxl>=3.1         # Excel report export
+requests>=2.31        # live OMIE / REN data loaders (live mode only)
+
+# Standard library used elsewhere: sqlite3, zoneinfo, dataclasses, datetime.

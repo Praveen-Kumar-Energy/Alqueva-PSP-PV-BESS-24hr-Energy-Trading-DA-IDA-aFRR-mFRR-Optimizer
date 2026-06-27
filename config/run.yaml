@@ -1,0 +1,82 @@
+# ==============================================================================
+# Alqueva PSP-PV-BESS 24-Hour Energy Trading Optimizer
+# Production Run Configuration
+# ==============================================================================
+#
+# DAILY WORKFLOW
+# --------------
+#   Just run:  python run_production.py
+#   AUTO mode (the default) sets the delivery date to TOMORROW in Portugal time,
+#   so nothing needs editing each morning.
+#
+# OVERRIDES (no YAML edit needed)
+#   Specific date  :  python run_production.py --date 08-07-2026
+#   Recovery start :  python run_production.py --date 08-07-2026 --from-phase realtime
+#   Validate only  :  python run_production.py --dry-run
+#   Backtest mode  :  python run_production.py --date 08-07-2026 --auto --synthetic
+#
+# See run_production.py --help for all options.
+# ==============================================================================
+
+# ── Delivery date ─────────────────────────────────────────────────────────────
+# auto          AUTO mode (default): delivery date = TOMORROW in Portugal
+#               (Europe/Lisbon). No editing needed for the daily morning run.
+# DD-MM-YYYY    MANUAL mode: a specific trading day, e.g. "06-07-2026".
+# The CLI --date flag overrides this value without editing the file.
+delivery_date: auto
+
+# ── Operator mode ─────────────────────────────────────────────────────────────
+# auto      Fully automated — no interactive prompts.
+#           Use for scheduled/cron runs or backtesting.
+# trader    Operator must press ENTER to approve each market gate.
+#           Use for live production to keep a human in the loop.
+mode: trader
+
+# ── Market data source ────────────────────────────────────────────────────────
+# synthetic  Built-in deterministic price/inflow data (no external APIs needed).
+#            Required for backtesting and development.
+# live       Fetch real-time prices from OMIE / ENTSO-E / REN APIs at runtime.
+#            Use for actual production runs (requires network + credentials).
+data_source: synthetic
+
+# ── Reports ───────────────────────────────────────────────────────────────────
+# Export the daily P&L, KPI and schedule Excel workbook after Phase 5D.
+export_excel: true
+
+# ── Pipeline phase switches ───────────────────────────────────────────────────
+# Disable any phase to skip it (useful for partial replay or crash recovery).
+# Phase dependencies are enforced at runtime: skipping DA also skips IDAs etc.
+#
+#  Phase   Gate                       Dependency
+#  ------  -------------------------  ---------------------------------
+#  1       DA                         —
+#  2A      IDA1                       DA
+#  2B      IDA2                       IDA1
+#  2C      IDA3                       IDA2
+#  2D/W1   XBID window 1              DA (run before delivery day)
+#  2D/W2   XBID window 2              DA (run on delivery day)
+#  3A      aFRR capacity offer        DA (or latest IDA)
+#  3B      mFRR capacity offer        aFRR
+#  4A      RT dispatch                aFRR + mFRR
+#  4B      aFRR activation            RT dispatch
+#  4C      mFRR activation            RT dispatch
+#  5A      Energy settlement          DA / IDA positions
+#  5B      Reserve settlement         aFRR + mFRR activation
+#  5C      Imbalance settlement       RT dispatch
+#  5D      Analytics + report         All settlements
+
+phases:
+  da:                    true    # Phase 1    — Day-Ahead bidding (OMIE DA auction)
+  ida1:                  true    # Phase 2A   — IDA1 intraday re-optimisation
+  ida2:                  true    # Phase 2B   — IDA2 intraday re-optimisation
+  ida3:                  true    # Phase 2C   — IDA3 intraday re-optimisation
+  xbid:                  true    # Phase 2D   — XBID continuous intraday (W1 and W2)
+  afrr:                  true    # Phase 3A   — aFRR capacity offer (PICASSO / REN)
+  mfrr:                  true    # Phase 3B   — mFRR capacity offer (MARI)
+  realtime:              true    # Phase 4A   — ISP real-time dispatch simulation (96 ISPs)
+  afrr_activation:       true    # Phase 4B   — aFRR TSO activation response
+  mfrr_activation:       true    # Phase 4C   — mFRR TSO activation response
+  energy_settlement:     true    # Phase 5A   — DA / IDA energy settlement
+  reserve_settlement:    true    # Phase 5B   — aFRR / mFRR reserve settlement
+  imbalance_settlement:  true    # Phase 5C   — Imbalance settlement (REN balancing)
+  analytics:             true    # Phase 5D   — Daily P&L + KPIs + Excel export

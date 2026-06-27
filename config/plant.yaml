@@ -1,0 +1,125 @@
+# =============================================================================
+# Alqueva PSP + PV + BESS — Physical Plant Configuration
+# =============================================================================
+# Every value is tagged CONFIRMED (public source) or ESTIMATED (flag in code).
+# Sign convention used everywhere in the codebase:
+#       generation / discharge  =  POSITIVE  (+)
+#       pumping / charging       =  NEGATIVE  (-)
+# =============================================================================
+
+plant:
+  name: "Alqueva"
+  country: "PT"
+  market_timezone: "Europe/Madrid"   # MIBEL gate times are CET
+  plant_timezone: "Europe/Lisbon"    # plant operations / SCADA local time
+
+# -----------------------------------------------------------------------------
+# Pumped-storage units — 4 reversible Francis pump-turbines
+# CONFIRMED: Alstom inauguration press release (Alqueva II, 2013), 4 x 130 MW.
+# https://www.alstom.com  (Alqueva II reversible units)
+# -----------------------------------------------------------------------------
+psp:
+  n_units: 4
+  p_turbine_nameplate_mw: 130.0     # CONFIRMED gross nameplate per unit
+  p_turbine_max_mw: 129.6           # net per unit after station auxiliaries (use in constraints)
+  p_turbine_min_mw: 57.0            # minimum stable load per unit (no operation 0 < P < 57)
+  p_pump_max_mw: 111.6              # ESTIMATED ~86% of nameplate — VERIFY vs SCADA peak pump draw
+  q_turbine_max_m3h: 756000         # 210 m3/s per unit
+  q_turbine_min_m3h: 360000         # 100 m3/s per unit
+  q_pump_max_m3h: 500000            # per unit
+  q_pump_min_m3h: 180000            # per unit
+  startup_cost_eur: 150.0           # ESTIMATE per unit per start (typical 100-300 EUR)
+  # Ramp rate of a synchronised unit (ESTIMATE). Francis pump-turbines ramp fast:
+  # ~25 MW/min/unit => 100 MW/min plant, so a 5-min aFRR FAT covers ~500 MW and the
+  # ENERGY envelope (not ramp) is the binding limit on reserve. Mode CHANGES
+  # (start/stop, pump<->turbine) are slower and excluded from fast aFRR sizing.
+  ramp_rate_mw_per_min_per_unit: 25.0
+
+# -----------------------------------------------------------------------------
+# Floating PV — CONFIRMED: Alqueva floating solar, inaugurated July 2022, 5 MWp.
+# https://www.edp.com (Alqueva floating solar pilot)
+# -----------------------------------------------------------------------------
+pv:
+  peak_capacity_mw: 5.0
+  latitude: 38.2
+  longitude: -7.5
+  temperature_coeff_per_c: -0.0045
+  t_ref_c: 25.0
+  g_ref_wm2: 1000.0
+  commission_year: 2022
+  degradation_rate_per_year: 0.005
+
+# -----------------------------------------------------------------------------
+# BESS — CONFIRMED: XFLEX Hydro project (EDP), 1 MW / ~2 MWh.
+# https://xflexhydro.com
+# -----------------------------------------------------------------------------
+bess:
+  power_mw: 1.0
+  capacity_mwh: 2.0
+  soc_min_frac: 0.10                # E_MIN = 0.20 MWh
+  soc_max_frac: 0.95                # E_MAX = 1.90 MWh
+  eta_charge: 0.90
+  eta_discharge: 0.90
+  initial_soc_frac: 0.50
+  afrr_fat_min: 5.0                 # PICASSO FAT — sizes deliverable aFRR from SOC
+  degradation_cost_eur_mwh: 62.5    # ESTIMATE throughput degradation
+
+# -----------------------------------------------------------------------------
+# Reservoirs — two-reservoir closed loop (Alqueva upper / Pedrogao lower).
+# CONFIRMED: Alqueva usable 3,150 Mm3 (4,150 total); Pedrogao usable 54 Mm3.
+# Pedrogao (lower) is the binding constraint during prolonged pumping.
+# -----------------------------------------------------------------------------
+reservoir:
+  upper_capacity_hm3: 4150.0
+  upper_usable_hm3: 3150.0
+  upper_min_hm3: 830.0              # 20% of total — hard floor
+  upper_initial_hm3: 2490.0         # 60% of total — optimization start
+  lower_capacity_hm3: 54.0          # CONFIRMED usable
+  lower_initial_hm3: 27.0           # 50% start (assumed)
+  lower_min_hm3: 5.0                # dry-run buffer — hard floor
+  # Monthly mean natural inflow (m3/h) — Guadiana river at Alqueva.
+  # Derived from 11-year hourly research dataset (2015-2025), daily-averaged.
+  # Jan 201 m3/s (wet) -> Sep 81 m3/s (dry): correct Alentejo hydrology.
+  monthly_inflow_m3h:
+    1: 723677.7
+    2: 753324.8
+    3: 887408.2
+    4: 710699.2
+    5: 571912.1
+    6: 443002.6
+    7: 357461.4
+    8: 304205.8
+    9: 291708.6
+    10: 345008.4
+    11: 446566.7
+    12: 550213.7
+
+# -----------------------------------------------------------------------------
+# FCR — MANDATORY, NON-REMUNERATED in Portugal/Spain.
+# Modelled ONLY as reserved headroom constraint, NEVER as a tradable market gate.
+# https://www.ren.pt (Manual de Procedimentos do Gestor do Sistema)
+# -----------------------------------------------------------------------------
+fcr:
+  mandatory_headroom_mw: 0.0        # set > 0 if TSO assigns an obligation; reserved, never sold
+
+# -----------------------------------------------------------------------------
+# Economic penalties (objective shaping)
+# -----------------------------------------------------------------------------
+economics:
+  pv_curtailment_penalty_eur_mwh: 50.0
+  spillage_penalty_eur_m3: 0.002
+  # Water value: marginal worth of stored upper-reservoir energy (EUR/MWh).
+  # Values terminal water so the 24h model pumps when price < water value and
+  # generates when price > water value (the reservoir is too large to bind in 24h,
+  # so without this, water would look free and the plant would never pump).
+  # Standard hydro-scheduling concept; calibrate to expected future spot level.
+  water_value_eur_mwh: 38.0
+
+# -----------------------------------------------------------------------------
+# Initial plant state (overridden by SCADA in live mode)
+# -----------------------------------------------------------------------------
+initial_state:
+  upper_reservoir_hm3: 2490.0
+  lower_reservoir_hm3: 27.0
+  bess_soc_frac: 0.50
+  units_on: [false, false, false, false]

@@ -1,0 +1,35 @@
+# =============================================================================
+# Solver Configuration — auto-selected via Pyomo, CPLEX-first.
+# =============================================================================
+# The solver is chosen automatically at run time by walking `fallback_order`
+# below and using the first one installed (see core_milp_solver.py):
+#   * CPLEX  — preferred; called as an EXECUTABLE through Pyomo (no Python
+#              binding, so it works under Python 3.14 too). Set `executable`.
+#   * HiGHS  — free fallback used when CPLEX is absent (`pip install highspy`).
+#   * CBC    — free fallback if a `cbc` executable is on PATH.
+# Nothing to change to run on a machine without CPLEX: it falls back to HiGHS.
+# =============================================================================
+
+solver:
+  name: "cplex"
+  # Full path to the CPLEX command-line executable. Leave as-is for this machine,
+  # or set to "cplex" if the binary directory is already on PATH.
+  executable: "C:/Program Files/IBM/ILOG/CPLEX_Studio2211/cplex/bin/x64_win64/cplex.exe"
+  # Active fallback chain: first installed solver wins. CPLEX is always preferred;
+  # appsi_highs (HiGHS) runs automatically when CPLEX is absent; cbc is last resort.
+  fallback_order: ["cplex", "appsi_highs", "cbc"]
+
+  mip_gap: 0.005          # 0.5% optimality gap — tight enough for trading, fast enough for gates
+  threads: 0              # 0 = let CPLEX choose (all cores)
+
+  # Per-gate wall-clock time limits (seconds). A gate that cannot solve in time
+  # must STOP and report — never submit an unproven bid.
+  time_limit_sec:
+    DA: 120
+    IDA1: 90
+    IDA2: 90
+    IDA3: 60
+    XBID: 30
+    aFRR: 60
+    mFRR: 60
+    default: 120
